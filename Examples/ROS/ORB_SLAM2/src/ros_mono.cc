@@ -31,7 +31,7 @@
 #include "../../../include/System.h"
 #include "tf/transform_datatypes.h"
 #include <tf/transform_broadcaster.h>
-#include <nav_msgs/Odometry.h>
+#include <geometry_msgs/PoseStamped.h>
 
 #include<opencv2/core/core.hpp>
 
@@ -47,8 +47,9 @@ public:
     void GrabImage(const sensor_msgs::ImageConstPtr& msg);
 
     ORB_SLAM2::System* mpSLAM;
-    ros::Publisher odom_pub;
+    ros::Publisher pose_pub;
     tf::TransformBroadcaster br;
+    uint32_t seq_number = 0;
 };
 
 int main(int argc, char **argv)
@@ -71,7 +72,7 @@ int main(int argc, char **argv)
     ros::NodeHandle nodeHandler;
     //ros::Subscriber sub = nodeHandler.subscribe("/camera/image_raw", 1, &ImageGrabber::GrabImage,&igb);
     ros::Subscriber sub = nodeHandler.subscribe("/usb_cam/image_raw", 1, &ImageGrabber::GrabImage,&igb);
-    igb.odom_pub = nodeHandler.advertise<nav_msgs::Odometry>("odom", 50);
+    igb.pose_pub = nodeHandler.advertise<geometry_msgs::PoseStamped>("pose", 10);
 
     ros::spin();
 
@@ -138,27 +139,27 @@ void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
     tf::Transform transform = tf::Transform(globalRotation_rh, globalTranslation_rh);
     br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "camera_link", "camera_pose"));
 
-    //publish odometry
-    nav_msgs::Odometry odom;
-    odom.header.stamp = current_time;
-    odom.header.frame_id = "odom";
+    // create pose message
+    geometry_msgs::PoseStamped pose_msg;
 
-    geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(0);
+    // fill in pose message header
+    pose_msg.header.seq = seq_number++;
+    pose_msg.header.stamp = current_time;
+    pose_msg.header.frame_id = "local_origin";
 
-    //set the position
-    odom.pose.pose.position.x = globalTranslation_rh[0];
-    odom.pose.pose.position.y = globalTranslation_rh[1];
-    odom.pose.pose.position.z = globalTranslation_rh[2];
-    odom.pose.pose.orientation = odom_quat;
+    // fill in pose position
+    pose_msg.pose.position.x = cameraTranslation_rh[0];
+    pose_msg.pose.position.y = cameraTranslation_rh[1];
+    pose_msg.pose.position.z = cameraTranslation_rh[2];
 
-    //set the velocity
-    odom.child_frame_id = "base_link";
-    odom.twist.twist.linear.x = 0;
-    odom.twist.twist.linear.y = 0;
-    odom.twist.twist.angular.z = 0;
+    // fill in pose orientation
+    pose_msg.pose.orientation.x = 1;
+    pose_msg.pose.orientation.y = 0;
+    pose_msg.pose.orientation.z = 0;
+    pose_msg.pose.orientation.w = 0;
 
-    //publish the message
-    odom_pub.publish(odom);
+    // publish the pose message
+    pose_pub.publish(pose_msg);
 }
 
 
